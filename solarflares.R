@@ -9,7 +9,7 @@ library(ggplot2)
 library(class)
 
 
-setwd("C:/Users/austi/OneDrive/Documents/MSPA/422/Group Project/solar flare")
+setwd("C:/Users/austi/OneDrive/Documents/MSPA/422/Group Project/solar flare/solarflares")
 
 
 ### Useful functions
