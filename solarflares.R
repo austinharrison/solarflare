@@ -7,9 +7,13 @@ library(glmnet)
 library(leaps)
 library(ggplot2)
 library(class)
+library(MASS, pos = 50)
+library(gbm)
+library(nnet)
+library(tree)
 
 
-setwd("C:/Users/austi/OneDrive/Documents/MSPA/422/Group Project/solar flare/solarflares")
+setwd("C:/Users/austi/OneDrive/Documents/MSPA/422/Group Project/solar flare/solarflare/")
 
 
 ### Useful functions
@@ -45,7 +49,7 @@ flare2 %>% group_by(m_class) %>% summarise(freq = n())
 flare2 %>% group_by(x_class) %>% summarise(freq = n())
 
 # Let's only try to predict C class, so remove M and X classes
-flare2 <- flare2 %>% select(-m_class, -x_class)
+flare2 <- flare2 %>% dplyr::select(-m_class, -x_class)
 
 
 ### Create test and training sets
@@ -120,8 +124,8 @@ bss10f.se <- se((data.test$c_class - bss10f.pred)^2) #standard error
 bss10f.se
 
 ### Random Forest
-rf.train <- randomForest(c_class ~ ., data = flare2, 
-                      importance = TRUE, ntree = 5000)
+rf.train <- randomForest(c_class ~ ., data = data.train, 
+                      importance = TRUE, ntree = 5000, mtry = 2)
 # varImpPlot(rf.train)
 rf.train
 rf.pred <- predict(rf.train, data.test)
@@ -130,6 +134,20 @@ rf.mse <- mean((data.test$c_class - rf.pred)^2) #mean square error
 rf.mse
 rf.se <- se((data.test$c_class - rf.pred)^2) #standard error
 rf.se
+
+# ### Random Forest 2
+# flare2b <- flare2
+# flare2b$c_class <- as.factor(flare2b$c_class)
+# 
+# rf2.train <- randomForest(c_class ~ ., data = flare2b[-test, ])
+# 
+# rf2.train
+# rf2.pred <- predict(rf2.train, data.test, type = 'prob')
+# 
+# rf2.mse <- mean((data.test$c_class - rf2.pred)^2) #mean square error
+# rf2.mse
+# rf2.se <- se((data.test$c_class - rf2.pred)^2) #standard error
+# rf2.se
 
 ### Ridge
 
@@ -206,13 +224,77 @@ knn.mse
 knn.se <- se((y.test - knn.pred) ^ 2) #standard error
 knn.se
 
+### Boosting model
+set.seed(1)
+boost.flare <- gbm(c_class ~ ., data = data.train, n.trees = 5000, interaction.depth = 4)
+summary(boost.flare)
+par(mfrow=c(1,2))
+plot(boost.flare, i = "zurich_class")
+plot(boost.flare, i = "spot_size")
+yhat.boost <- predict(boost.flare, newdata = data.test, n.trees = 5000)
+boost.mse <- mean((y.test - yhat.boost)^2) 
+boost.mse # [1] 0.5634364807
+boost.se <- se((y.test - yhat.boost)^2)
+boost.se # [1] 0.1202052845
+
+## fit using only zurich_class and spot_size since they are the most important variables based on summary
+boost.flare <- gbm(c_class ~ zurich_class + spot_size, data = data.train, n.trees = 5000, interaction.depth = 4)
+yhat.boost <- predict(boost.flare, newdata = data.test, n.trees = 5000)
+boost.mse <- mean((y.test - yhat.boost)^2) 
+boost.mse # [1] 0.5486130138
+boost.se <- se((y.test - yhat.boost)^2)
+boost.se # [1] 0.1162284558
+# slight improvement, but not much
+
+### Artificial neural network model
+nnet.fit <- nnet(c_class ~ ., data = data.train, size = 2)
+nnet.predict <- predict(nnet.fit, data.test)
+ann.mse <- mean((y.test - nnet.predict)^2)
+ann.mse # [1] 0.564971
+ann.se <- se((y.test - nnet.predict)^2)
+ann.se # [1] 0.1233341
+# plot(data.test$c_class, nnet.predict, main = "Artificial Neural Network Predictions vs Actual",
+#      xlab = "Actual", ylab = "Predictions", pch = 19, col = "blue")
+
+
+
+### Tree model
+tree.flare <- tree(c_class ~ ., data = data.train)
+summary(tree.flare) # zurich_class, spot_size, spot_distrib, and activity are included in tree
+plot(tree.flare)
+text(tree.flare, pretty = 0)
+tree.flare
+yhat.tree <- predict(tree.flare, data.test)
+tree.mse <- mean((y.test - yhat.tree)^2)
+tree.mse # [1] 0.5562123343
+tree.se <- se((y.test - yhat.tree)^2)
+tree.se # [1] 0.1573765894
+
+# prune the tree to see if we get better results
+set.seed(1)
+cv.flare <- cv.tree(tree.flare)
+plot(cv.flare$size, cv.flare$dev, type = "b")
+prune.flare <- prune.tree(tree.flare, best = 2)
+plot(prune.flare)
+text(prune.flare, pretty = 0)
+yhat.prune <- predict(prune.flare, data.test)
+prune.mse <- mean((y.test - yhat.prune)^2)
+prune.mse # [1] 0.5724697791
+prune.se <- se((y.test - yhat.prune)^2)
+prune.se # [1] 0.1573765894
+# unfortunately the model did not improve when pruning
+
+
+
 
 # Model Evaluations
 results.mse <- c(mean.mse, lm.mse, bss10f.mse, ridge.mse, lasso.mse, rf.mse, 
-                 knn.mse)
-results.se <- c(mean.se, lm.se, bss10f.se, ridge.se, lasso.se, rf.se, knn.se)
+                 knn.mse, boost.mse, ann.mse, tree.mse)
+results.se <- c(mean.se, lm.se, bss10f.se, ridge.se, lasso.se, rf.se, knn.se,
+                boost.se, ann.se, tree.se)
 results.model <- c("Mean", "Least Squares", "Best Subset 10-Fold CV",
-                   "Ridge", "Lasso", "Random Forest", "KNN")
+                   "Ridge", "Lasso", "Random Forest", "KNN", "Boosting",
+                   "Neural Net", "Decision Tree")
 results <- data.frame(results.model, results.mse, results.se)
 colnames(results) <- c("Model", "MSE", "SE")
 results <- arrange(results, MSE)
@@ -224,4 +306,4 @@ ggplot(results, aes(x = reorder(Model, desc(MSE)), y = MSE)) +
   geom_errorbar(aes(ymin = MSE - SE, ymax = MSE + SE), width = .4) +
   geom_label(label = round(results$MSE, 3)) +
   labs(x = "Model")
-# ggsave(filename = "msebarplot.png", width = 7, height = 4)
+ggsave(filename = "msebarplot.png", width = 10, height = 6)
