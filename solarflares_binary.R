@@ -14,6 +14,7 @@ library(tree)
 library(caret)
 library(pROC)
 library(Cairo)    # Save nicer plots
+library(gridExtra)
 
 
 setwd("C:/Users/austi/OneDrive/Documents/MSPA/422/Group Project/solar flare/solarflare/")
@@ -58,6 +59,49 @@ flare2$flare_occurred <- ifelse(flare2$flare_occurred, 1, 0)
 # Let's only try to predict C class, so remove M and X classes
 flare2 <- flare2 %>% dplyr::select(-m_class, -x_class, -c_class)
 
+flare2$flare_occ_factor <- as.factor(flare2$flare_occurred)
+# bar chart for zurich class
+p1 <- ggplot(flare2, aes(x = zurich_class, fill = flare_occ_factor)) +
+  geom_bar(position = "dodge") +
+  guides(fill = F)
+
+p2 <- ggplot(flare2, aes(x = spot_size, fill = flare_occ_factor)) +
+  geom_bar(position = "dodge") +
+  guides(fill = F)
+
+p3 <- ggplot(flare2, aes(x = spot_distrib, fill = flare_occ_factor)) +
+  geom_bar(position = "dodge") +
+  guides(fill = F)
+
+p4 <- ggplot(flare2, aes(x = activity, fill = flare_occ_factor)) +
+  geom_bar(position = "dodge") +
+  guides(fill = F)
+
+p5 <- ggplot(flare2, aes(x = evolution, fill = flare_occ_factor)) +
+  geom_bar(position = "dodge") +
+  guides(fill = F)
+
+p6 <- ggplot(flare2, aes(x = act_code, fill = flare_occ_factor)) +
+  geom_bar(position = "dodge") +
+  guides(fill = F)
+
+p7 <- ggplot(flare2, aes(x = hist_complex, fill = flare_occ_factor)) +
+  geom_bar(position = "dodge") +
+  guides(fill = F)
+
+p8 <- ggplot(flare2, aes(x = become_complex, fill = flare_occ_factor)) +
+  geom_bar(position = "dodge") +
+  guides(fill = F)
+
+p9 <- ggplot(flare2, aes(x = area, fill = flare_occ_factor)) +
+  geom_bar(position = "dodge") +
+  guides(fill = F)
+
+p10 <- ggplot(flare2, aes(x = area_largest, fill = flare_occ_factor)) +
+  geom_bar(position = "dodge") +
+  guides(fill = F)
+
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, ncol = 5)
 
 ### Create test and training sets
 n <- dim(flare2)[1]
@@ -360,6 +404,16 @@ results.accuracy <- c(mean.cf$overall[1], lm.cf$overall[1],
                       lasso.cf$overall[1], rf.cf$overall[1], knn.cf$overall[1], 
                       ann.cf$overall[1], tree.cf$overall[1], 
                       prune.cf$overall[1])
+results.sensitivity <- c(mean.cf$byClass[1], lm.cf$byClass[1], 
+                      bss10f.cf$byClass[1], ridge.cf$byClass[1], 
+                      lasso.cf$byClass[1], rf.cf$byClass[1], knn.cf$byClass[1], 
+                      ann.cf$byClass[1], tree.cf$byClass[1], 
+                      prune.cf$byClass[1])
+results.specificity <- c(mean.cf$byClass[2], lm.cf$byClass[2], 
+                         bss10f.cf$byClass[2], ridge.cf$byClass[2], 
+                         lasso.cf$byClass[2], rf.cf$byClass[2], knn.cf$byClass[2], 
+                         ann.cf$byClass[2], tree.cf$byClass[2], 
+                         prune.cf$byClass[2])
 results.auc <- c(mean.roc$auc, lm.roc$auc, bss10f.roc$auc, ridge.roc$auc,
                       lasso.roc$auc, rf.roc$auc, knn.roc$auc, 
                       ann.roc$auc, tree.roc$auc, prune.roc$auc)
@@ -369,8 +423,10 @@ results.model <- c("Mean", "Least Squares", "Best Subset 10-Fold CV",
 results.fill <- rep("normal", length(results.model))
 results.fill[1] <- "highlight"
 results <- data.frame(results.model, results.mse, results.se, results.accuracy, 
-                      results.auc, results.fill)
-colnames(results) <- c("Model", "MSE", "SE", "Accuracy", "AUC", "fillcolor")
+                      results.sensitivity, results.specificity, results.auc, 
+                      results.fill)
+colnames(results) <- c("Model", "MSE", "SE", "Accuracy", "Sensitivity", "Specificity",
+                       "AUC", "fillcolor")
 results <- arrange(results, MSE)
 results # %>% write.csv("modresults.csv", row.names = F)
 
